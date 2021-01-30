@@ -1,10 +1,43 @@
 #include <memory>
 #include <errno.h>
 #include <pty.h>
+#include <signal.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "vtbuffer.h"
+
+namespace
+{
+    pid_t g_childPid;
+}
+
+void ForwardSignalToChildProcess(int signalNr)
+{
+    kill(g_childPid, signalNr);
+}
+
+#define SIGACTION(signum, act) if (sigaction(signum, act, nullptr) == -1) perror("sigaction("#signum")")
+
+void SetupSignalForwarding(pid_t childPid)
+{
+    g_childPid = childPid;
+    
+    struct sigaction sa;
+    sa.sa_handler = &ForwardSignalToChildProcess;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    
+    SIGACTION(SIGABRT, &sa);
+    SIGACTION(SIGCONT, &sa);
+    SIGACTION(SIGHUP, &sa);
+    SIGACTION(SIGINT, &sa);
+    SIGACTION(SIGQUIT, &sa);
+    SIGACTION(SIGTSTP, &sa);
+    SIGACTION(SIGTERM, &sa);
+    SIGACTION(SIGUSR1, &sa);
+    SIGACTION(SIGUSR2, &sa);
+}
 
 void LaunchProgram(int argc, char* argv[])
 {
@@ -75,6 +108,7 @@ int main(int argc, char *argv[])
     else
     {
         // Parent
+        SetupSignalForwarding(pid);
         CopyOutput(master);
     }
 
